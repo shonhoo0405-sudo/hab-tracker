@@ -162,6 +162,12 @@
 
 <div class="toast" id="toast"></div>
 
+<div id="loading-overlay" style="position:fixed;inset:0;background:rgba(255,255,255,0.95);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;">
+  <div style="width:40px;height:40px;border:3px solid #e0ddd4;border-top-color:#2c5f2e;border-radius:50%;animation:spin 0.8s linear infinite;"></div>
+  <div style="font-size:15px;color:#6b6960;font-family:'Segoe UI',Arial,sans-serif;">Firebase-тай холбогдож байна...</div>
+</div>
+<style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+
 <div class="container">
   <div class="tabs">
     <button class="tab-btn active" onclick="showTab('register')">＋ Бүртгэх</button>
@@ -332,9 +338,28 @@
   </div>
 </div>
 
-<script>
+<script type="module">
+// ─── FIREBASE SETUP ──────────────────────────────────────────────────────────
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-app.js";
+import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBhq9WvbyLt3VYPLiajFf5BMfNt20gQ_eA",
+  authDomain: "hab-tracker-145eb.firebaseapp.com",
+  databaseURL: "https://hab-tracker-145eb-default-rtdb.firebaseio.com",
+  projectId: "hab-tracker-145eb",
+  storageBucket: "hab-tracker-145eb.firebasestorage.app",
+  messagingSenderId: "699288874368",
+  appId: "1:699288874368:web:b26af5892ecf44c4ec6565",
+  measurementId: "G-LCLB0NCDNR"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+const dbRef = ref(db, 'hab_data');
+
 // ─── DATA ───────────────────────────────────────────────────────────────────
-let data = JSON.parse(localStorage.getItem('hab_ppe_v2') || 'null') || {
+let data = {
   employees: ['Батбаяр Д.','Дорж Г.','Энхбаяр Н.','Гантулга Б.','Сарангэрэл О.'],
   positions: ['Уурхай', 'Агуулах', 'Цех', 'Захиргаа', 'Гадаа талбай'],
   ppeItems: [
@@ -348,7 +373,40 @@ let data = JSON.parse(localStorage.getItem('hab_ppe_v2') || 'null') || {
   records: []
 };
 
-function save() { localStorage.setItem('hab_ppe_v2', JSON.stringify(data)); }
+let isLoaded = false;
+
+// Firebase-аас өгөгдөл бодит цагт унших
+onValue(dbRef, (snapshot) => {
+  const val = snapshot.val();
+  if (val) {
+    data = val;
+    if (!data.records) data.records = [];
+    if (!data.employees) data.employees = [];
+    if (!data.positions) data.positions = [];
+    if (!data.ppeItems) data.ppeItems = [];
+  }
+  if (!isLoaded) {
+    isLoaded = true;
+    document.getElementById('loading-overlay').style.display = 'none';
+    initForm();
+  } else {
+    // Бусад төхөөрөмжөөс өөрчлөлт орвол UI шинэчлэх
+    initForm();
+    const activeTab = document.querySelector('.tab-btn.active');
+    if (activeTab) {
+      const tabs = ['register','records','report','settings'];
+      const idx = Array.from(document.querySelectorAll('.tab-btn')).indexOf(activeTab);
+      if (tabs[idx] === 'records') { populateFilters(); renderTable(); }
+      if (tabs[idx] === 'report') renderReport();
+      if (tabs[idx] === 'settings') renderSettings();
+    }
+    showToast('🔄 Мэдээлэл шинэчлэгдлээ');
+  }
+});
+
+function save() {
+  set(dbRef, data).catch(() => showToast('Хадгалахад алдаа гарлаа!', 'warn'));
+}
 
 // ─── TABS ────────────────────────────────────────────────────────────────────
 function showTab(t) {
@@ -613,8 +671,9 @@ function removePPE(name) {
 }
 function clearAll() {
   if (!confirm('БҮГДИЙГ устгах уу? Буцааж сэргээх боломжгүй!')) return;
-  localStorage.removeItem('hab_ppe_v2');
-  location.reload();
+  data.records = [];
+  save();
+  showToast('Бүх бүртгэл устгагдлаа ✓');
 }
 
 // ─── TOAST ───────────────────────────────────────────────────────────────────
@@ -668,7 +727,24 @@ function importJSON(e) {
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 document.getElementById('header-date').textContent = new Date().toLocaleDateString('mn-MN', { year:'numeric', month:'long', day:'numeric' });
-initForm();
+// initForm нь Firebase onValue callback-аас дуудагдана
+
+// Inline onclick-уудад зориулж window-д холбоно
+window.showTab = showTab;
+window.addRecord = addRecord;
+window.clearForm = clearForm;
+window.renderTable = renderTable;
+window.clearFilters = clearFilters;
+window.delRecord = delRecord;
+window.exportCSV = exportCSV;
+window.exportJSON = exportJSON;
+window.importJSON = importJSON;
+window.addEmp = addEmp;
+window.addPos = addPos;
+window.addPPE = addPPE;
+window.removeItem = removeItem;
+window.removePPE = removePPE;
+window.clearAll = clearAll;
 </script>
 </body>
 </html>
